@@ -12,8 +12,11 @@ class TimerData: ObservableObject {
     @Published var startTime: Date? = nil
     @Published var elapsedTime: TimeInterval = 0
     @Published var heldTime: TimeInterval = 0
+    @Published var laps: [TimeInterval] = []
+    @Published var countdownTime: TimeInterval = 0
     var timerCancellable: AnyCancellable?
-
+    var countDownCancellable: AnyCancellable?
+    
     func start() {
         self.startTime = Date() - self.elapsedTime
         let publisher = Timer.publish(every: 0.1, on: .main, in: .common)
@@ -23,7 +26,16 @@ class TimerData: ObservableObject {
             }
         }
     }
-
+    
+    func addLap() {
+        if(self.laps.count == 0){
+            self.laps.append(self.elapsedTime)
+        }else{
+            
+        }
+        self.elapsedTime = 0
+    }
+    
     func stop() {
         timerCancellable?.cancel()
         self.heldTime = self.elapsedTime
@@ -33,57 +45,150 @@ class TimerData: ObservableObject {
         timerCancellable?.cancel()
         self.heldTime = 0
         self.elapsedTime = 0
+        self.laps = []
+    }
+    
+    func startCountdown(from time: TimeInterval) {
+        self.countdownTime = time
+        let publisher = Timer.publish(every: 0.1, on: .main, in: .common)
+        countDownCancellable = publisher.autoconnect().sink { _ in
+            if self.countdownTime > 0 {
+                self.countdownTime -= 0.1
+            } else {
+                self.clearCountDown()
+            }
+        }
+    }
+    
+    
+    func clearCountDown() {
+        countDownCancellable?.cancel()
+        self.countdownTime = 0
     }
 }
 
 
 
 struct ContentView: View {
-    
     @ObservedObject var timerData = TimerData()
     @State private var isRunning = false
-
+    @State private var isCountdown = false
+    @State private var date: Date = Date()
+    @State private var windowCenter: CGPoint = CGPoint(x: NSScreen.main?.frame.midX ?? 0, y: NSScreen.main?.frame.midY ?? 0)
+    
     var body: some View {
         VStack {
-            Text(timeString(time: timerData.elapsedTime))
-                .font(.largeTitle)
-                .padding()
-
             HStack {
                 Button(action: {
-                    if self.isRunning {
-                        self.timerData.stop()
-                    } else {
-                        self.timerData.start()
-                    }
-
-                    self.isRunning.toggle()
-
+                    NSApplication.shared.terminate(nil)
+                }) {
+                    Image(systemName: "xmark.circle").padding(EdgeInsets(top: 5, leading: 0, bottom: 5, trailing: 0))
+                }
+                Spacer()
+                Button(action: {
+                    self.isCountdown.toggle()
                 }, label: {
-                    Text(isRunning ? "Stop" : "Start")
+                    Image(systemName: "clock.arrow.circlepath")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 20, height: 20)
+                        .cornerRadius(6)
+                        .padding(EdgeInsets(top: 5, leading: 0, bottom: 5, trailing: 0))
+                })
+            }
+            
+            if !isCountdown {
+                // Timer View
+                Text(timeString(time: timerData.elapsedTime))
+                    .font(.largeTitle)
+                    .padding()
+                
+                HStack {
+                    Button(action: {
+                        if self.isRunning {
+                            self.timerData.stop()
+                        } else {
+                            self.timerData.start()
+                        }
+                        
+                        self.isRunning.toggle()
+                        
+                    }, label: {
+                        Text(isRunning ? "Stop" : "Start")
+                            .padding(.horizontal, 40)
+                            .padding(.vertical, 20)
+                    })
+                    
+                    Button(action: {
+                        self.timerData.reset()
+                        self.isRunning = false
+                        
+                    }, label: {
+                        Text("Reset")
+                            .padding(.horizontal, 40)
+                            .padding(.vertical, 20)
+                    })
+                }
+                
+                Button(action: {
+                    self.timerData.addLap()
+                }, label: {
+                    Text("Lap")
                         .padding(.horizontal, 40)
                         .padding(.vertical, 20)
                 })
                 
-                Button(action: {
-                    self.timerData.reset()
-                    self.isRunning = false
-
-                }, label: {
-                    Text("Reset")
-                        .padding(.horizontal, 40)
-                        .padding(.vertical, 20)
-                })
+                if timerData.laps.count > 0 {
+                    Text("Laps:")
+                    ForEach(timerData.laps, id: \.self) { lap in
+                        VStack{
+                            Divider()
+                            Text(timeString(time: lap))
+                        }
+                    }
+                }
+            } else {
+                VStack {
+                    if timerData.countdownTime > 0 {
+                        VStack{
+                            Text("Time Remaining:")
+                                .font(.title)
+                            Text((timeString(time: timerData.countdownTime)))
+                                .font(.title)
+                        }.padding().frame(alignment: .center)
+                    }
+                    DatePicker("Enter Time:", selection: $date, displayedComponents: [.hourAndMinute])
+                    HStack {
+                        Button(action: {
+                            let time = date.timeIntervalSince(Date())
+                            timerData.startCountdown(from: time)
+                        }, label: {
+                            Text("Start")
+                                .padding(.horizontal, 40)
+                                .padding(.vertical, 20)
+                        })
+                        
+                        Button(action: {
+                            self.timerData.clearCountDown()
+                        }, label: {
+                            Text("Clear")
+                                .padding(.horizontal, 40)
+                                .padding(.vertical, 20)
+                        })
+                    }
+                    
+                }
+                
             }
-            .padding()
-        }
+        }.padding(EdgeInsets(top: 5, leading: 10, bottom: 10, trailing: 10))
     }
+    
     func timeString(time: TimeInterval) -> String {
         let hours = Int(time) / 3600
         let minutes = Int(time) / 60 % 60
         let seconds = Int(time) % 60
         let fraction = Int(time * 10) % 10
-
+        
         if hours > 0 {
             return String(format: "%02i:%02i:%02i.%1i", hours, minutes, seconds, fraction)
         } else if minutes > 0 {
@@ -94,8 +199,4 @@ struct ContentView: View {
             return String(format: "%01i.%1i", seconds, fraction)
         }
     }
-}
-
-#Preview {
-    ContentView()
 }

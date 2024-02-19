@@ -12,6 +12,7 @@ struct CorkApp: App {
     var body: some Scene {
         MenuBarExtra("Cork", systemImage: "stopwatch") {
             ContentView()
-        }.menuBarExtraStyle(.window)
+        }
+        .menuBarExtraStyle(.window)
     }
 }
