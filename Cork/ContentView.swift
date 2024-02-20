@@ -13,6 +13,7 @@ class TimerData: ObservableObject {
     @Published var elapsedTime: TimeInterval = 0
     @Published var heldTime: TimeInterval = 0
     @Published var laps: [TimeInterval] = []
+    @Published var previousElapsedTime: TimeInterval = 0
     @Published var countdownTime: TimeInterval = 0
     var timerCancellable: AnyCancellable?
     var countDownCancellable: AnyCancellable?
@@ -28,27 +29,42 @@ class TimerData: ObservableObject {
     }
     
     func addLap() {
-        if(self.laps.count == 0){
+        if self.laps.count == 0 {
             self.laps.append(self.elapsedTime)
-        }else{
-            
+        } else {
+            self.laps.append(self.elapsedTime - self.previousElapsedTime)
         }
-        self.elapsedTime = 0
+        self.previousElapsedTime = self.elapsedTime
+    }
+    
+    func removeLap(at index: Int) {
+        if index < laps.count {
+            let removedLapTime = laps[index]
+            laps.remove(at: index)
+            if index < laps.count {
+                laps[index] += removedLapTime
+            } else {
+                previousElapsedTime -= removedLapTime
+            }
+        }
     }
     
     func stop() {
         timerCancellable?.cancel()
+        timerCancellable = nil
         self.heldTime = self.elapsedTime
     }
     
     func reset(){
         timerCancellable?.cancel()
+        timerCancellable = nil
         self.heldTime = 0
         self.elapsedTime = 0
         self.laps = []
     }
     
     func startCountdown(from time: TimeInterval) {
+        guard countDownCancellable == nil else { return }
         self.countdownTime = time
         let publisher = Timer.publish(every: 0.1, on: .main, in: .common)
         countDownCancellable = publisher.autoconnect().sink { _ in
@@ -60,21 +76,23 @@ class TimerData: ObservableObject {
         }
     }
     
-    
     func clearCountDown() {
         countDownCancellable?.cancel()
+        countDownCancellable = nil
         self.countdownTime = 0
+    }
+    
+    func clearLaps() {
+        self.laps = []
     }
 }
 
 
-
 struct ContentView: View {
-    @ObservedObject var timerData = TimerData()
+    @StateObject var timerData = TimerData()
     @State private var isRunning = false
     @State private var isCountdown = false
     @State private var date: Date = Date()
-    @State private var windowCenter: CGPoint = CGPoint(x: NSScreen.main?.frame.midX ?? 0, y: NSScreen.main?.frame.midY ?? 0)
     
     var body: some View {
         VStack {
@@ -139,11 +157,26 @@ struct ContentView: View {
                 })
                 
                 if timerData.laps.count > 0 {
+                    Button(action: {
+                        self.timerData.clearLaps()
+                    }, label: {
+                        Text("Clear Laps")
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 5)
+                    })
                     Text("Laps:")
                     ForEach(timerData.laps, id: \.self) { lap in
                         VStack{
                             Divider()
-                            Text(timeString(time: lap))
+                            HStack{
+                                Text(timeString(time: lap))
+                                Button(action: {
+                                    self.timerData.removeLap(at: self.timerData.laps.firstIndex(of: lap)!)
+                                },  label: {
+                                    Image(systemName: "xmark.circle")
+                                })
+                            }
+                            
                         }
                     }
                 }
