@@ -15,12 +15,17 @@ class TimerData: ObservableObject {
     @Published var laps: [TimeInterval] = []
     @Published var previousElapsedTime: TimeInterval = 0
     @Published var countdownTime: TimeInterval = 0
+    @Published var millisecondRefreshRate = true
     var timerCancellable: AnyCancellable?
     var countDownCancellable: AnyCancellable?
     
     func start() {
         self.startTime = Date() - self.elapsedTime
-        let publisher = Timer.publish(every: 0.1, on: .main, in: .common)
+        var refreshRate = 0.1
+        if(!millisecondRefreshRate){
+            refreshRate = 1.0
+        }
+        let publisher = Timer.publish(every: refreshRate, on: .main, in: .common)
         timerCancellable = publisher.autoconnect().sink { _ in
             if let startTime = self.startTime {
                 self.elapsedTime = Date().timeIntervalSince(startTime)
@@ -102,6 +107,14 @@ struct ContentView: View {
                 }) {
                     Image(systemName: "xmark.circle").padding(EdgeInsets(top: 5, leading: 0, bottom: 5, trailing: 0))
                 }
+                Spacer()
+                Button(action: {
+                    self.timerData.millisecondRefreshRate.toggle()
+                }, label: {
+                    Text(self.timerData.millisecondRefreshRate ? "0.1" : "1")
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                })
                 Spacer()
                 Button(action: {
                     self.isCountdown.toggle()
@@ -217,19 +230,35 @@ struct ContentView: View {
     }
     
     func timeString(time: TimeInterval) -> String {
-        let hours = Int(time) / 3600
-        let minutes = Int(time) / 60 % 60
-        let seconds = Int(time) % 60
-        let fraction = Int(time * 10) % 10
-        
-        if hours > 0 {
-            return String(format: "%02i:%02i:%02i.%1i", hours, minutes, seconds, fraction)
-        } else if minutes > 0 {
-            return String(format: "%02i:%02i.%1i", minutes, seconds, fraction)
-        } else if seconds > 10 {
-            return String(format: "%02i.%1i", seconds, fraction)
+        if(timerData.millisecondRefreshRate){
+            let hours = Int(time) / 3600
+            let minutes = Int(time) / 60 % 60
+            let seconds = Int(time) % 60
+            let fraction = Int(time * 10) % 10
+            
+            if hours > 0 {
+                return String(format: "%02i:%02i:%02i.%1i", hours, minutes, seconds, fraction)
+            } else if minutes > 0 {
+                return String(format: "%02i:%02i.%1i", minutes, seconds, fraction)
+            } else if seconds > 10 {
+                return String(format: "%02i.%1i", seconds, fraction)
+            }else{
+                return String(format: "%01i.%1i", seconds, fraction)
+            }
         }else{
-            return String(format: "%01i.%1i", seconds, fraction)
+            let hours = Int(time) / 3600
+            let minutes = Int(time) / 60 % 60
+            let seconds = Int(time) % 60
+            
+            if hours > 0 {
+                return String(format: "%02i:%02i:%02i", hours, minutes, seconds)
+            } else if minutes > 0 {
+                return String(format: "%02i:%02i", minutes, seconds)
+            } else if seconds > 10 {
+                return String(format: "%02i", seconds)
+            }else{
+                return String(format: "%01i", seconds)
+            }
         }
     }
 }
